@@ -9,8 +9,8 @@ export function createApp(): Express {
 
     app.get('/name', (_req, res) => {
       res.json({
-          first: 'YourFirstName',
-          last: 'YourLastName'
+          first: 'Jerry',
+          last: 'You'
           });
       });
 
