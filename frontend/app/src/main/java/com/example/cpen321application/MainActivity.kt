@@ -20,20 +20,42 @@ import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.compose.material3.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.Alignment
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
+
             CPEN321ApplicationTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
+                    /* Greeting(
                         apiBaseUrl = BuildConfig.API_BASE_URL,
                         modifier = Modifier.padding(innerPadding)
-                    )
+                    ) */
+                    MainScreen(onClick = {})
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun MainScreen(onClick: () -> Unit) {
+    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+
+        Button(onClick = {}) {
+            Text("Login + Server")
+        }
+        Button(onClick = {}) {
+            Text("Live Updates")
+        }
+        Button(onClick = {}) {
+            Text("Timer and Surprise")
         }
     }
 }
