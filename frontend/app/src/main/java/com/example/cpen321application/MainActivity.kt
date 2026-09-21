@@ -24,6 +24,8 @@ import androidx.compose.material3.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.Alignment
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,11 +35,11 @@ class MainActivity : ComponentActivity() {
 
             CPEN321ApplicationTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    /* Greeting(
-                        apiBaseUrl = BuildConfig.API_BASE_URL,
-                        modifier = Modifier.padding(innerPadding)
-                    ) */
-                    MainScreen(onClick = {})
+//                    Greeting(
+//                        apiBaseUrl = BuildConfig.API_BASE_URL,
+//                        modifier = Modifier.padding(innerPadding)
+//                    )
+                    App()
                 }
             }
         }
@@ -45,20 +47,75 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainScreen(onClick: () -> Unit) {
+fun App() {
+    var currentScreen by remember { mutableStateOf("main")}
+
+    when (currentScreen) {
+        "main" -> MainScreen(
+            onLoginClick = {currentScreen = "login" },
+            onLiveClick = { currentScreen = "live" },
+            onTimerClick = { currentScreen = "timer" }
+        )
+
+        "login" -> LoginScreen(onBackClick = { currentScreen = "main" })
+        "live" -> Text("Live Updates Screen")
+        "timer" -> Text("Timer Screen")
+    }
+}
+
+@Composable
+fun MainScreen(onLoginClick: () -> Unit,
+               onLiveClick: () -> Unit,
+               onTimerClick: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
 
-        Button(onClick = {}) {
+        Button(onClick = onLoginClick) {
             Text("Login + Server")
         }
-        Button(onClick = {}) {
+        Button(onClick = onLiveClick) {
             Text("Live Updates")
         }
-        Button(onClick = {}) {
+        Button(onClick = onTimerClick) {
             Text("Timer and Surprise")
         }
     }
 }
+
+@Composable
+fun LoginScreen(onBackClick: () -> Unit) {
+    var nameText by remember { mutableStateOf("Loading name...") }
+    var serverTimeText by remember { mutableStateOf("Loading server time...")}
+    var clientTimeText by remember { mutableStateOf("") }
+    var serverIpText by remember { mutableStateOf("Loading server IP...") }
+
+    LaunchedEffect(Unit) {
+        nameText = fetchName(BuildConfig.API_BASE_URL)
+        serverTimeText = fetchServerTime(BuildConfig.API_BASE_URL)
+        serverIpText = fetchServerIp(BuildConfig.API_BASE_URL)
+        clientTimeText = ZonedDateTime.now().format(
+            DateTimeFormatter.ofPattern("HH:mm:ss 'GMT'xxx")
+        )
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(nameText)
+        Text(serverTimeText)
+        Text("Client time: $clientTimeText")
+        Text(serverIpText)
+
+        Button(onClick = onBackClick) {
+            Text("Back")
+        }
+    }
+
+
+}
+
+
 
 @Composable
 fun Greeting(apiBaseUrl: String, modifier: Modifier = Modifier) {
@@ -74,6 +131,46 @@ fun Greeting(apiBaseUrl: String, modifier: Modifier = Modifier) {
     )
 }
 
+private suspend fun fetchServerTime(apiBaseUrl: String): String =
+    withContext(Dispatchers.IO) {
+
+        val url = "${apiBaseUrl.trimEnd('/')}/server-time"
+
+        try {
+            val connection =
+                URL(url).openConnection() as HttpURLConnection
+
+            connection.requestMethod = "GET"
+
+            val body = connection.inputStream
+                .bufferedReader()
+                .use { it.readText() }
+
+            body
+        } catch (e: Exception) {
+            "Could not load server time: ${e.message}"
+        }
+    }
+private suspend fun fetchName(apiBaseUrl: String): String =
+    withContext(Dispatchers.IO) {
+
+        val url = "${apiBaseUrl.trimEnd('/')}/name"
+
+        try {
+            val connection =
+                URL(url).openConnection() as HttpURLConnection
+
+            connection.requestMethod = "GET"
+
+            val body = connection.inputStream
+                .bufferedReader()
+                .use { it.readText() }
+
+            body
+        } catch (e: Exception) {
+            "Could not load name: ${e.message}"
+        }
+    }
 private suspend fun fetchHealthStatus(apiBaseUrl: String): String = withContext(Dispatchers.IO) {
     val healthUrl = "${apiBaseUrl.trimEnd('/')}/health"
     try {
@@ -97,3 +194,23 @@ private suspend fun fetchHealthStatus(apiBaseUrl: String): String = withContext(
         "Backend unreachable ($healthUrl): ${e.message ?: e.javaClass.simpleName}"
     }
 }
+
+private suspend fun fetchServerIp(apiBaseUrl: String): String =
+    withContext(Dispatchers.IO) {
+
+        val url = "${apiBaseUrl.trimEnd('/')}/server-ip"
+
+        try {
+            val connection =
+                URL(url).openConnection() as HttpURLConnection
+
+            connection.requestMethod = "GET"
+
+            connection.inputStream
+                .bufferedReader()
+                .use { it.readText() }
+
+        } catch (e: Exception) {
+            "Could not load server IP: ${e.message}"
+        }
+    }
