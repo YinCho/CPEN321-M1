@@ -26,6 +26,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.Alignment
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialException
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -87,11 +96,21 @@ fun LoginScreen(onBackClick: () -> Unit) {
     var serverTimeText by remember { mutableStateOf("Loading server time...")}
     var clientTimeText by remember { mutableStateOf("") }
     var serverIpText by remember { mutableStateOf("Loading server IP...") }
+    var clientIpText by remember { mutableStateOf("Loading client IP...") }
+    var googleUserName by remember { mutableStateOf("Not signed in") }
+    var googleStatus by remember { mutableStateOf("") }
+
+    val context = LocalContext.current
+    val credentialManager = remember {
+        CredentialManager.create(context)
+    }
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         nameText = fetchName(BuildConfig.API_BASE_URL)
         serverTimeText = fetchServerTime(BuildConfig.API_BASE_URL)
         serverIpText = fetchServerIp(BuildConfig.API_BASE_URL)
+        clientIpText = fetchClientIp(BuildConfig.API_BASE_URL)
         clientTimeText = ZonedDateTime.now().format(
             DateTimeFormatter.ofPattern("HH:mm:ss 'GMT'xxx")
         )
@@ -106,9 +125,83 @@ fun LoginScreen(onBackClick: () -> Unit) {
         Text(serverTimeText)
         Text("Client time: $clientTimeText")
         Text(serverIpText)
+        Text(clientIpText)
 
         Button(onClick = onBackClick) {
             Text("Back")
+        }
+
+        Button(
+            onClick = {
+                coroutineScope.launch {
+                    googleStatus = "Signing in..."
+
+                    val googleOption =
+                        GetSignInWithGoogleOption.Builder(
+                            context.getString(R.string.google_web_client_id)
+                        ).build()
+
+                    val request =
+                        GetCredentialRequest.Builder()
+                            .addCredentialOption(googleOption)
+                            .build()
+
+                    try {
+                        val result = credentialManager.getCredential(
+                            context = context,
+                            request = request
+                        )
+
+                        val credential = result.credential
+
+                        if (
+                            credential is CustomCredential &&
+                            credential.type ==
+                            GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                        ) {
+                            val googleCredential =
+                                GoogleIdTokenCredential.createFrom(
+                                    credential.data
+                                )
+
+                            val firstName =
+                                googleCredential.givenName ?: ""
+
+                            val lastName =
+                                googleCredential.familyName ?: ""
+
+                            googleUserName =
+                                "$firstName $lastName".trim()
+
+                            if (googleUserName.isBlank()) {
+                                googleUserName =
+                                    googleCredential.displayName
+                                        ?: googleCredential.id
+                            }
+
+                            googleStatus = ""
+                        } else {
+                            googleStatus =
+                                "Unexpected credential type"
+                        }
+
+                    } catch (e: GetCredentialException) {
+                        googleStatus =
+                            "Sign in failed: ${e.message}"
+                    } catch (e: Exception) {
+                        googleStatus =
+                            "Sign in error: ${e.message}"
+                    }
+                }
+            }
+        ) {
+            Text("Sign in with Google")
+        }
+
+        Text("Logged-in user: $googleUserName")
+
+        if (googleStatus.isNotBlank()) {
+            Text(googleStatus)
         }
     }
 
@@ -212,5 +305,25 @@ private suspend fun fetchServerIp(apiBaseUrl: String): String =
 
         } catch (e: Exception) {
             "Could not load server IP: ${e.message}"
+        }
+    }
+
+private suspend fun fetchClientIp(apiBaseUrl: String): String =
+    withContext(Dispatchers.IO) {
+
+        val url = "${apiBaseUrl.trimEnd('/')}/client-ip"
+
+        try {
+            val connection =
+                URL(url).openConnection() as HttpURLConnection
+
+            connection.requestMethod = "GET"
+
+            connection.inputStream
+                .bufferedReader()
+                .use { it.readText() }
+
+        } catch (e: Exception) {
+            "Could not load client IP: ${e.message}"
         }
     }

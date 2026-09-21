@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">CPEN321 Application</string>
+    <string name="google_web_client_id">77531810384-9vusv8crmdqjllpdgkn6gprb9mhbec0s.apps.googleusercontent.com</string>
 </resources>
