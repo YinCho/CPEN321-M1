@@ -13,6 +13,9 @@ export function createApp(): Express {
           last: 'You'
           });
       });
+    app.get('/server-ip', (_req, res) => {
+      res.json({ ip: process.env.SERVER_PUBLIC_IP });
+    });
 
   app.get('/server-time', (_req, res) => {
         const now = new Date();
@@ -43,6 +46,12 @@ export function createApp(): Express {
 
   app.use((_req, res) => {
     res.status(404).json({ error: 'Not Found' });
+  });
+
+  app.set('trust proxy', true);
+
+  app.get('/client-ip', (req, res) => {
+      res.json({ ip: req.ip });
   });
 
 
