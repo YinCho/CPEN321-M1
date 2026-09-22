@@ -35,7 +35,24 @@ import androidx.credentials.exceptions.GetCredentialException
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.launch
-
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
+import androidx.compose.runtime.DisposableEffect
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import org.json.JSONObject
+import android.os.SystemClock
+import kotlin.random.Random
+import kotlinx.coroutines.delay
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,8 +84,8 @@ fun App() {
         )
 
         "login" -> LoginScreen(onBackClick = { currentScreen = "main" })
-        "live" -> Text("Live Updates Screen")
-        "timer" -> Text("Timer Screen")
+        "live" -> LiveUpdatesScreen(onBackClick = { currentScreen = "main" })
+        "timer" -> TimerScreen(onBackClick = { currentScreen = "main" })
     }
 }
 
@@ -91,6 +108,469 @@ fun MainScreen(onLoginClick: () -> Unit,
 }
 
 @Composable
+fun TimerScreen(onBackClick: () -> Unit) {
+
+    var minutes by remember { mutableStateOf("") }
+    var seconds by remember { mutableStateOf("") }
+
+    var timeRemaining by remember { mutableStateOf(0) }
+
+    // setup, countdown, waiting, ready, result
+    var phase by remember { mutableStateOf("setup") }
+
+    var reactionStartTime by remember { mutableStateOf(0L) }
+
+    var round by remember { mutableStateOf(1) }
+
+    var reactionScores by remember {
+        mutableStateOf(listOf<Long>())
+    }
+
+    var targetPosition by remember {
+        mutableStateOf(0)
+    }
+
+    var errorText by remember { mutableStateOf("") }
+
+    LaunchedEffect(phase) {
+
+        if (phase == "countdown") {
+
+            while (timeRemaining > 0) {
+                delay(1000)
+                timeRemaining--
+            }
+
+            phase = "waiting"
+        }
+
+        if (phase == "waiting") {
+
+            val randomDelay = Random.nextLong(
+                1000,
+                4001
+            )
+
+            delay(randomDelay)
+
+            targetPosition =
+                Random.nextInt(0, 9)
+
+            reactionStartTime =
+                SystemClock.elapsedRealtime()
+
+            phase = "ready"
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+
+        when (phase) {
+
+            "setup" -> {
+
+                Text("Set Timer")
+
+                Spacer(
+                    modifier = Modifier.height(12.dp)
+                )
+
+                OutlinedTextField(
+                    value = minutes,
+                    onValueChange = {
+                        if (it.all { character ->
+                                character.isDigit()
+                            }) {
+                            minutes = it
+                        }
+                    },
+                    label = {
+                        Text("Minutes")
+                    }
+                )
+
+                Spacer(
+                    modifier = Modifier.height(8.dp)
+                )
+
+                OutlinedTextField(
+                    value = seconds,
+                    onValueChange = {
+                        if (it.all { character ->
+                                character.isDigit()
+                            }) {
+                            seconds = it
+                        }
+                    },
+                    label = {
+                        Text("Seconds")
+                    }
+                )
+
+                if (errorText.isNotBlank()) {
+
+                    Spacer(
+                        modifier = Modifier.height(8.dp)
+                    )
+
+                    Text(errorText)
+                }
+
+                Spacer(
+                    modifier = Modifier.height(12.dp)
+                )
+
+                Button(
+                    onClick = {
+
+                        val mins =
+                            minutes.toIntOrNull() ?: 0
+
+                        val secs =
+                            seconds.toIntOrNull() ?: 0
+
+                        if (mins == 0 && secs == 0) {
+
+                            errorText =
+                                "Enter a time greater than 0."
+
+                        } else if (secs > 59) {
+
+                            errorText =
+                                "Seconds must be between 0 and 59."
+
+                        } else {
+
+                            errorText = ""
+
+                            timeRemaining =
+                                mins * 60 + secs
+
+                            round = 1
+
+                            reactionScores =
+                                emptyList()
+
+                            phase = "countdown"
+                        }
+                    }
+                ) {
+                    Text("Start Timer")
+                }
+            }
+
+            "countdown" -> {
+
+                Text("Time Remaining")
+
+                Spacer(
+                    modifier = Modifier.height(12.dp)
+                )
+
+                Text(
+                    "${timeRemaining / 60}:" +
+                            String.format(
+                                "%02d",
+                                timeRemaining % 60
+                            )
+                )
+            }
+
+            "waiting" -> {
+
+                Text("Timer finished!")
+
+                Spacer(
+                    modifier = Modifier.height(16.dp)
+                )
+
+                Text("Round $round of 3")
+
+                Spacer(
+                    modifier = Modifier.height(8.dp)
+                )
+
+                Text("Get ready...")
+
+                Text("Wait for the button!")
+            }
+
+            "ready" -> {
+
+                Text("Round $round of 3")
+
+                Spacer(
+                    modifier = Modifier.height(16.dp)
+                )
+
+                val positions = listOf(
+                    Alignment.TopStart,
+                    Alignment.TopCenter,
+                    Alignment.TopEnd,
+                    Alignment.CenterStart,
+                    Alignment.Center,
+                    Alignment.CenterEnd,
+                    Alignment.BottomStart,
+                    Alignment.BottomCenter,
+                    Alignment.BottomEnd
+                )
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(300.dp)
+                ) {
+
+                    Button(
+                        modifier = Modifier.align(
+                            positions[targetPosition]
+                        ),
+                        onClick = {
+
+                            val currentReaction =
+                                SystemClock.elapsedRealtime() -
+                                        reactionStartTime
+
+                            reactionScores =
+                                reactionScores +
+                                        currentReaction
+
+                            if (round < 3) {
+
+                                round++
+
+                                phase = "waiting"
+
+                            } else {
+
+                                phase = "result"
+                            }
+                        }
+                    ) {
+                        Text("TAP!")
+                    }
+                }
+            }
+
+            "result" -> {
+
+                Text("Reaction Challenge Complete!")
+
+                Spacer(
+                    modifier = Modifier.height(16.dp)
+                )
+
+                reactionScores.forEachIndexed {
+                        index,
+                        score ->
+
+                    Text(
+                        "Round ${index + 1}: " +
+                                "$score ms"
+                    )
+                }
+
+                Spacer(
+                    modifier = Modifier.height(16.dp)
+                )
+
+                if (reactionScores.isNotEmpty()) {
+
+                    val best =
+                        reactionScores.minOrNull()
+                            ?: 0
+
+                    val average =
+                        reactionScores
+                            .average()
+                            .toLong()
+
+                    Text(
+                        "Best: $best ms"
+                    )
+
+                    Text(
+                        "Average: $average ms"
+                    )
+                }
+
+                Spacer(
+                    modifier = Modifier.height(16.dp)
+                )
+
+                Button(
+                    onClick = {
+
+                        minutes = ""
+                        seconds = ""
+
+                        timeRemaining = 0
+
+                        round = 1
+
+                        reactionScores =
+                            emptyList()
+
+                        errorText = ""
+
+                        phase = "setup"
+                    }
+                ) {
+                    Text("Play Again")
+                }
+            }
+        }
+
+        Spacer(
+            modifier = Modifier.height(20.dp)
+        )
+
+        Button(
+            onClick = onBackClick
+        ) {
+            Text("Back")
+        }
+    }
+}
+
+@Composable
+fun LiveUpdatesScreen(onBackClick: () -> Unit) {
+
+    var connectionStatus by remember {
+        mutableStateOf("Connecting...")
+    }
+
+    val pixels = remember {
+        mutableStateListOf<Color>().apply {
+            repeat(16 * 16) {
+                add(Color.White)
+            }
+        }
+    }
+
+    val coroutineScope = rememberCoroutineScope()
+
+    val client = remember {
+        OkHttpClient()
+    }
+
+    DisposableEffect(Unit) {
+
+        val request = Request.Builder()
+            .url("wss://34.169.187.216/ws")
+            .build()
+
+        val listener = object : WebSocketListener() {
+
+            override fun onOpen(
+                webSocket: WebSocket,
+                response: Response
+            ) {
+                coroutineScope.launch {
+                    connectionStatus = "Connected"
+                }
+            }
+
+            override fun onMessage(
+                webSocket: WebSocket,
+                text: String
+            ) {
+                try {
+                    val json = JSONObject(text)
+
+                    val x = json.getInt("x")
+                    val y = json.getInt("y")
+                    val hexColor = json.getString("color")
+
+                    val pixelColor = Color(
+                        android.graphics.Color.parseColor(hexColor)
+                    )
+
+                    if (x in 0..15 && y in 0..15) {
+                        coroutineScope.launch {
+                            pixels[y * 16 + x] = pixelColor
+                        }
+                    }
+
+                } catch (e: Exception) {
+                    coroutineScope.launch {
+                        connectionStatus =
+                            "Pixel error: ${e.message}"
+                    }
+                }
+            }
+
+            override fun onFailure(
+                webSocket: WebSocket,
+                t: Throwable,
+                response: Response?
+            ) {
+                coroutineScope.launch {
+                    connectionStatus =
+                        "Error: ${t.message}"
+                }
+            }
+        }
+
+        val webSocket =
+            client.newWebSocket(request, listener)
+
+        onDispose {
+            webSocket.close(1000, "Leaving screen")
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+
+        Text("WebSocket: $connectionStatus")
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Canvas(
+            modifier = Modifier
+                .size(320.dp)
+                .border(1.dp, Color.Black)
+        ) {
+            val cellWidth = size.width / 16
+            val cellHeight = size.height / 16
+
+            for (y in 0 until 16) {
+                for (x in 0 until 16) {
+
+                    val color = pixels[y * 16 + x]
+
+                    drawRect(
+                        color = color,
+                        topLeft = Offset(
+                            x * cellWidth,
+                            y * cellHeight
+                        ),
+                        size = Size(
+                            cellWidth,
+                            cellHeight
+                        )
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(onClick = onBackClick) {
+            Text("Back")
+        }
+    }
+}
+
+@Composable
 fun LoginScreen(onBackClick: () -> Unit) {
     var nameText by remember { mutableStateOf("Loading name...") }
     var serverTimeText by remember { mutableStateOf("Loading server time...")}
@@ -99,6 +579,7 @@ fun LoginScreen(onBackClick: () -> Unit) {
     var clientIpText by remember { mutableStateOf("Loading client IP...") }
     var googleUserName by remember { mutableStateOf("Not signed in") }
     var googleStatus by remember { mutableStateOf("") }
+    var isAuthenticated by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val credentialManager = remember {
@@ -106,14 +587,19 @@ fun LoginScreen(onBackClick: () -> Unit) {
     }
     val coroutineScope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
-        nameText = fetchName(BuildConfig.API_BASE_URL)
-        serverTimeText = fetchServerTime(BuildConfig.API_BASE_URL)
-        serverIpText = fetchServerIp(BuildConfig.API_BASE_URL)
-        clientIpText = fetchClientIp(BuildConfig.API_BASE_URL)
-        clientTimeText = ZonedDateTime.now().format(
-            DateTimeFormatter.ofPattern("HH:mm:ss 'GMT'xxx")
-        )
+    LaunchedEffect(isAuthenticated) {
+        if (isAuthenticated) {
+
+            nameText = fetchName(BuildConfig.API_BASE_URL)
+            serverTimeText = fetchServerTime(BuildConfig.API_BASE_URL)
+            serverIpText = fetchServerIp(BuildConfig.API_BASE_URL)
+            clientIpText = fetchClientIp(BuildConfig.API_BASE_URL)
+
+            clientTimeText = ZonedDateTime.now().format(
+                DateTimeFormatter.ofPattern("HH:mm:ss 'GMT'xxx")
+            )
+        }
+
     }
 
     Column(
@@ -121,11 +607,15 @@ fun LoginScreen(onBackClick: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(nameText)
-        Text(serverTimeText)
-        Text("Client time: $clientTimeText")
-        Text(serverIpText)
-        Text(clientIpText)
+        if (isAuthenticated) {
+            Text("Your name: $nameText")
+            Text("Server time: $serverTimeText")
+            Text("Client time: $clientTimeText")
+            Text("Server IP: $serverIpText")
+            Text("Client IP: $clientIpText")
+        } else {
+            Text("Sign in with Google to continue")
+        }
 
         Button(onClick = onBackClick) {
             Text("Back")
@@ -180,6 +670,7 @@ fun LoginScreen(onBackClick: () -> Unit) {
                             }
 
                             googleStatus = ""
+                            isAuthenticated = true
                         } else {
                             googleStatus =
                                 "Unexpected credential type"
